@@ -1,8 +1,10 @@
 import json
-import time
+
+import pytest
 
 from clients import PayhubClient
 from mocks.stripe_like_processing import sign_stripe_like, stripe_like_webhook_payload
+from qa_toolkit.waiter import smart_wait
 from settings import STRIPE_LIKE_SECRET
 
 
@@ -23,6 +25,14 @@ def test_webhook_for_nonexistent_order_is_dropped_without_error(payhub_client, s
 
     assert response.status_code == 202
 
-    time.sleep(3)
+    with pytest.raises(TimeoutError):
+        smart_wait(
+            function=lambda: sqs_client["outbound"].receive_messages(),
+            expected_result=lambda messages: any(
+                json.loads(m["Body"]).get("order_id") == 999999 for m in messages
+            ),
+            timeout=3,
+        )
+
     messages = sqs_client["outbound"].receive_messages()
     assert not any(json.loads(m["Body"]).get("order_id") == 999999 for m in messages)

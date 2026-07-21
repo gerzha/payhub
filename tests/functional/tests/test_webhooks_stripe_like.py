@@ -1,9 +1,11 @@
 import json
-import time
+
+import pytest
 
 from clients import PayhubClient
 from constants import OrderStatus, Provider
 from mocks.stripe_like_processing import sign_stripe_like, stripe_like_webhook_payload
+from qa_toolkit.waiter import smart_wait
 from settings import STRIPE_LIKE_SECRET
 
 
@@ -58,7 +60,15 @@ def test_duplicate_webhook_is_idempotent(payhub_client, make_order, sqs_client) 
     payhub_client.wait_order_in_status(order.id, OrderStatus.PAID)
 
     _send_signed_webhook(payhub_client, order.id, "payment_succeeded")
-    time.sleep(3)
+
+    with pytest.raises(TimeoutError):
+        smart_wait(
+            function=lambda: sqs_client["outbound"].receive_messages(),
+            expected_result=lambda messages: any(
+                _matches_status_event(m, order.id, OrderStatus.PAID) for m in messages
+            ),
+            timeout=3,
+        )
 
     messages = sqs_client["outbound"].receive_messages()
     status_events = [m for m in messages if _matches_status_event(m, order.id, OrderStatus.PAID)]
