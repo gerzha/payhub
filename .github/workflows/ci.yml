@@ -26,6 +26,10 @@ jobs:
           done
       - run: pip install -e tests/functional
       - run: pytest tests/functional/tests -v
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
       - if: always()
         run: docker compose logs
       - if: always()
