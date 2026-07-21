@@ -54,18 +54,18 @@ def test_duplicate_webhook_is_idempotent(payhub_client, make_order, sqs_client) 
 
     _send_signed_webhook(payhub_client, order.id, "COMPLETED")
 
+    def count_status_events() -> int:
+        messages = sqs_client["outbound"].receive_messages()
+        return len([m for m in messages if _matches_status_event(m, order.id, OrderStatus.PAID)])
+
     with pytest.raises(TimeoutError):
         smart_wait(
-            function=lambda: sqs_client["outbound"].receive_messages(),
-            expected_result=lambda messages: any(
-                _matches_status_event(m, order.id, OrderStatus.PAID) for m in messages
-            ),
+            function=count_status_events,
+            expected_result=lambda count: count > 1,
             timeout=3,
         )
 
-    messages = sqs_client["outbound"].receive_messages()
-    status_events = [m for m in messages if _matches_status_event(m, order.id, OrderStatus.PAID)]
-    assert len(status_events) == 1
+    assert count_status_events() == 1
 
 
 def _matches_status_event(message: dict, order_id: int, status: str) -> bool:
