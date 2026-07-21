@@ -17,3 +17,20 @@ class OrderStatus(StrEnum):
 class Routes(StrEnum):
     ORDERS = "orders"
     WEBHOOKS = "webhooks"
+
+
+class StripeLikeEvent(StrEnum):
+    PAYMENT_SUCCEEDED = "payment_succeeded"
+    PAYMENT_FAILED = "payment_failed"
+
+
+class PaypalLikeState(StrEnum):
+    COMPLETED = "COMPLETED"
+    DENIED = "DENIED"
+
+
+class Headers(StrEnum):
+    SIGNATURE = "X-Signature"
+
+
+INVALID_SIGNATURE = "garbage-signature"

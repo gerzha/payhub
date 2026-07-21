@@ -1,5 +1,7 @@
 from clients import PayhubClient
-from constants import OrderStatus, Provider
+from constants import OrderStatus, Provider, Routes
+from qa_toolkit.base_wrappers import BaseWrapper
+from qa_toolkit.randomize import generate_random_int_unique
 
 
 def test_ping(payhub_client: PayhubClient) -> None:
@@ -17,6 +19,9 @@ def test_create_order_returns_pending(payhub_client: PayhubClient) -> None:
 
 
 def test_get_order_not_found(payhub_client: PayhubClient) -> None:
-    response = payhub_client.get(payhub_client.build_url("orders", entity_id=999999))
+    error = payhub_client.get(
+        payhub_client.build_url(Routes.ORDERS, entity_id=generate_random_int_unique()),
+        wrapper=BaseWrapper.wrap_404,
+    )
 
-    assert response.status_code == 404
+    assert error.detail == "order not found"
