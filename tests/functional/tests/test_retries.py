@@ -1,0 +1,28 @@
+import json
+import time
+
+from clients import PayhubClient
+from mocks.stripe_like_processing import sign_stripe_like, stripe_like_webhook_payload
+from settings import STRIPE_LIKE_SECRET
+
+
+def test_webhook_for_unknown_provider_returns_404(payhub_client: PayhubClient) -> None:
+    response = payhub_client.send_webhook("unknown_provider_like", {"foo": "bar"})
+
+    assert response.status_code == 404
+
+
+def test_webhook_for_nonexistent_order_is_dropped_without_error(payhub_client, sqs_client) -> None:
+    payload = stripe_like_webhook_payload(order_id=999999, status="payment_succeeded")
+    body = json.dumps(payload).encode()
+    signature = sign_stripe_like(body, STRIPE_LIKE_SECRET)
+
+    response = payhub_client.send_webhook(
+        "stripe_like", payload, headers={"X-Signature": signature}
+    )
+
+    assert response.status_code == 202
+
+    time.sleep(3)
+    messages = sqs_client["outbound"].receive_messages()
+    assert not any(json.loads(m["Body"]).get("order_id") == 999999 for m in messages)

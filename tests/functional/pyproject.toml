@@ -1,0 +1,25 @@
+[project]
+name = "payhub-functional-tests"
+version = "0.1.0"
+description = "Functional test framework for payhub — validates the wire contract, imports no production code"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest>=8.3",
+    "requests>=2.32",
+    "pydantic>=2.9",
+    "boto3>=1.35",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["clients", "api_wrappers", "models", "constants", "settings"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["qa_toolkit*", "mocks*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: payhub
+      POSTGRES_PASSWORD: payhub
+      POSTGRES_DB: payhub
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: sqs
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: ["CMD", "awslocal", "sqs", "list-queues"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  wiremock:
+    image: wiremock/wiremock
+    ports:
+      - "8080:8080"
+
+  queue-init:
+    image: localstack/localstack:3.8
+    depends_on:
+      localstack:
+        condition: service_healthy
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        awslocal --endpoint-url=http://localstack:4566 sqs create-queue --queue-name payhub-inbound-webhooks
+        awslocal --endpoint-url=http://localstack:4566 sqs create-queue --queue-name payhub-outbound-status
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      queue-init:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    environment:
+      PAYHUB_DATABASE_URL: postgresql+asyncpg://payhub:payhub@postgres:5432/payhub
+      PAYHUB_SQS_ENDPOINT_URL: http://localstack:4566
+      PAYHUB_INBOUND_QUEUE_NAME: payhub-inbound-webhooks
+      PAYHUB_OUTBOUND_QUEUE_NAME: payhub-outbound-status
+      PAYHUB_STRIPE_LIKE_SECRET: stripe_like_dev_secret
+      PAYHUB_PAYPAL_LIKE_SECRET: paypal_like_dev_secret
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+
+  worker:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      queue-init:
+        condition: service_completed_successfully
+    environment:
+      PAYHUB_DATABASE_URL: postgresql+asyncpg://payhub:payhub@postgres:5432/payhub
+      PAYHUB_SQS_ENDPOINT_URL: http://localstack:4566
+      PAYHUB_INBOUND_QUEUE_NAME: payhub-inbound-webhooks
+      PAYHUB_OUTBOUND_QUEUE_NAME: payhub-outbound-status
+      PAYHUB_STRIPE_LIKE_SECRET: stripe_like_dev_secret
+      PAYHUB_PAYPAL_LIKE_SECRET: paypal_like_dev_secret
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    command: python -m src.worker.order_worker
